@@ -1,0 +1,13 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/__pycache__
+/.vs/WF_Damage_Calc/CopilotIndices/18.6.39577.51406
+/.vs/WF_Damage_Calc.slnx/FileContentIndex
+/.vs/WF_Damage_Calc.slnx/v18/.wsuo
+/.vs/WF_Damage_Calc.slnx/v18/DocumentLayout.backup.json
+/.vs/WF_Damage_Calc.slnx/v18/DocumentLayout.json
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
+/.vs/slnx.sqlite-journal
