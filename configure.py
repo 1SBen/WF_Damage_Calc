@@ -32,12 +32,16 @@ def main():
                         help="Exclude any mods/arcanes that require headshots")
     parser.add_argument("--exclude-wf-arcane", action="append", default=[],
                         help="Exclude a warframe arcane by exact name (can repeat)")
-    parser.add_argument("--burst", action="store_true",
-                        help="Calculate burst DPS (ignore reload). Default is sustained DPS.")
     parser.add_argument("--exclude-weapon-arcane", action="append", default=[],
                         help="Exclude a weapon arcane by exact name (can repeat)")
     parser.add_argument("--exclude-mod", action="append", default=[],
                         help="Exclude a mod by exact name (can repeat)")
+    parser.add_argument("--burst", action="store_true",
+                    help="Calculate burst DPS (ignore reload). Default is sustained DPS.")
+    parser.add_argument("--dot", action="store_false",
+                    help="exclude Damage over Time (Slash, Heat, etc.) in total DPS")
+    parser.add_argument("--dot-duration", type=float, default=1.0,
+                    help="Seconds of DoT to count (default 1, full = 6).")
 
     args = parser.parse_args()
 
@@ -53,7 +57,8 @@ def main():
         allow_headshot=not args.no_headshot,
         exclude_wf_arcanes=args.exclude_wf_arcane,
         exclude_weapon_arcanes=args.exclude_weapon_arcane,
-        exclude_mods=args.exclude_mod
+        exclude_mods=args.exclude_mod,
+        dot_duration=args.dot_duration
     )
 
 if __name__ == "__main__":

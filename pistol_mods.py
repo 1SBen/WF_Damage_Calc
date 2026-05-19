@@ -5,6 +5,14 @@
 # ---------- BASE MOD LIST (no stacked conditional bonuses) ----------
 
 pistol_mods_base = [
+    #IPS
+    {"name": "Concussion Rounds",   "impact_bonus": 0.90},   # +90% Impact
+    {"name": "Pummel",              "impact_bonus": 1.20},   # +120% Impact
+    {"name": "No Return",           "puncture_bonus": 0.60}, # +60% Puncture
+    {"name": "Bore",                "puncture_bonus": 1.20}, # +120% Puncture
+    {"name": "Razor Shot",          "slash_bonus": 0.60},    # +60% Slash
+    {"name": "Maim",                "slash_bonus": 1.20},    # +120% Slash
+
     # Base damage (strongest three)
     {"name": "Hornet Strike",           "base_dmg": 2.20},
     {"name": "Magnum Force",            "base_dmg": 1.65},
@@ -26,13 +34,13 @@ pistol_mods_base = [
     {"name": "Magnetic Might",          "elemental": 0.60, "cd": 0.40},
 
     # Elemental – all 90% and Primed (165%) mods, plus special hybrids
-    {"name": "Pathogen Rounds",         "elemental": 0.90},
-    {"name": "Convulsion",              "elemental": 0.90},
-    {"name": "Heated Charge",           "elemental": 0.90},
-    {"name": "Deep Freeze",             "elemental": 0.90},
-    {"name": "Primed Heated Charge",    "elemental": 1.65},
-    {"name": "Primed Convulsion",       "elemental": 1.65},
-    {"name": "Accelerated Isotope",     "elemental": 0.60, "fire_rate": 0.60},  # radiation + fire rate
+    {"name": "Pathogen Rounds",         "elemental": 0.90, "elemental_type": "toxin"},
+    {"name": "Convulsion",              "elemental": 0.90, "elemental_type": "electricity"},
+    {"name": "Heated Charge",           "elemental": 0.90, "elemental_type": "heat"},
+    {"name": "Deep Freeze",             "elemental": 0.90, "elemental_type": "cold"},
+    {"name": "Primed Heated Charge",    "elemental": 1.65, "elemental_type": "heat"},
+    {"name": "Primed Convulsion",       "elemental": 1.65, "elemental_type": "electricity"},
+    {"name": "Accelerated Isotope",     "elemental": 0.60, "fire_rate": 0.60, "elemental_type" : "radiation"},  # radiation + fire rate
 
     # Fire rate (keep Gunslinger and Anemic Agility)
     {"name": "Gunslinger",              "fire_rate": 0.72},

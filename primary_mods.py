@@ -1,6 +1,8 @@
 # primary_mods.py – All max‑rank rifle mods
 
 primary_mods = [
+    #IPS
+  
     # Base damage
     {"name": "Serration",              "base_dmg": 1.65},
     {"name": "Heavy Caliber",          "base_dmg": 1.65},
