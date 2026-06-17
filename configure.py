@@ -58,6 +58,8 @@ def main():
         exclude_wf_arcanes=args.exclude_wf_arcane,
         exclude_weapon_arcanes=args.exclude_weapon_arcane,
         exclude_mods=args.exclude_mod,
+        sustained=not args.burst,        
+        include_dot=args.dot, 
         dot_duration=args.dot_duration
     )
 
