@@ -14,11 +14,11 @@ primary_mods = [
     {"name": "Vital Sense",            "cd": 1.20},
     {"name": "Hammer Shot",            "cd": 0.60},
     # Elemental
-    {"name": "Primed Cryo Rounds",     "elemental": 1.65},
-    {"name": "Infected Clip",          "elemental": 0.90},
-    {"name": "Stormbringer",           "elemental": 0.90},
-    {"name": "Hellfire",               "elemental": 0.90},
-    {"name": "Cryo Rounds",            "elemental": 0.90},
+    {"name": "Primed Cryo Rounds",     "elemental": 1.65, "elemental_type": "cold"},
+    {"name": "Infected Clip",          "elemental": 0.90, "elemental_type": "toxin"},
+    {"name": "Stormbringer",           "elemental": 0.90, "elemental_type": "electricity"},
+    {"name": "Hellfire",               "elemental": 0.90, "elemental_type": "heat"},
+    {"name": "Cryo Rounds",            "elemental": 0.90, "elemental_type": "cold"},
     # Fire rate
     {"name": "Vile Acceleration",      "fire_rate": 0.90, "base_dmg": -0.15},
     {"name": "Speed Trigger",          "fire_rate": 0.60},

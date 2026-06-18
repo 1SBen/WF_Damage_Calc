@@ -39,24 +39,36 @@ from arcane_calcs import compute_enervate_cc
 
 @dataclass
 class BuildStats:
-    """
-    Flat numeric bonuses aggregated from ALL sources
-    (mods + warframe arcanes + weapon arcane + external buffs).
-    Passed into DPSCalculator as a single object instead of 10+ loose args.
-    """
-    base_dmg:        float = 0.0   # additive multiplier on base damage
-    multishot:       float = 0.0
-    fire_rate:       float = 0.0
-    elemental:       float = 0.0
-    cc_mod:          float = 0.0   # % CC (multiplied by weapon base CC)
-    cd_mod:          float = 0.0   # % CD (multiplied by weapon base CD)
-    flat_cc:         float = 0.0   # flat CC added after the % scaling
-    final_dmg:       float = 0.0   # multiplies total damage at the end
-    final_cd_add:    float = 0.0   # flat addition to the CD multiplier
-    ext_faction:     float = 0.0   # faction damage bonus
-    ext_fire_rate:   float = 0.0   # external fire-rate buff
-    ext_base_dmg:    float = 0.0   # external base-damage buff
-    enervate_active: bool  = False
+    """Flat numeric bonuses aggregated from ALL sources."""
+    damage_bonuses: float = 0.0
+    external_damage_bonuses: float = 0.0
+
+    impact_bonuses: float = 0.0
+    puncture_bonuses: float = 0.0
+    slash_bonuses: float = 0.0
+
+    elemental_bonuses: float = 0.0
+    heat_bonuses: float = 0.0
+    cold_bonuses: float = 0.0
+    electricity_bonuses: float = 0.0
+    toxin_bonuses: float = 0.0
+    gas_bonuses: float = 0.0
+
+    crit_chance_bonuses: float = 0.0
+    crit_damage_bonuses: float = 0.0
+    flat_crit_chance: float = 0.0
+    final_crit_multiplier_add: float = 0.0
+
+    fire_rate_bonuses: float = 0.0
+    external_fire_rate_bonuses: float = 0.0
+    multishot_bonuses: float = 0.0
+    status_chance_bonuses: float = 0.0
+
+    faction_damage_bonuses: float = 0.0
+    final_damage_bonuses: float = 0.0
+    ability_strength_bonuses: float = 0.0
+
+    enervate_active: bool = False
 
 
 @dataclass
@@ -66,10 +78,13 @@ class OptimizeConfig:
     weapon_type:             str
     damage_mode:             str            = "all"
     faction:                 Optional[str]  = None
+    sustained:               bool           = True
     allow_headshot:          bool           = True
     use_arcanes:             bool           = True
     use_weapon_arcanes:      bool           = True
     use_conditional_stacks:  bool           = True
+    include_dot:             bool           = True
+    dot_duration:            float          = 1.0   # 6 is the full duration
     strength_mods:           list           = field(default_factory=list)
     include_buffs:           list           = field(default_factory=list)
     exclude_mods:            list           = field(default_factory=list)
@@ -96,116 +111,392 @@ class DPSCalculator:
     """
 
     @staticmethod
-    def calculate(weapon: dict, base_damage: float,
-                  strength_mult: float, stats: BuildStats) -> float:
+    def calculate_damage_bonuses_multiplier(stats: BuildStats) -> float:
+        return 1 + stats.damage_bonuses
 
-        # ── Enervate (dynamic flat CC) ────────────────────────────────────
+    @staticmethod
+    def calculate_external_damage_bonuses_multiplier(stats: BuildStats) -> float:
+        return 1 + stats.external_damage_bonuses
+
+    @staticmethod
+    def calculate_faction_damage_bonus_multiplier(stats: BuildStats) -> float:
+        return 1 + stats.faction_damage_bonuses
+
+    @staticmethod
+    def calculate_modded_crit_chance(base_crit_chance: float, stats: BuildStats) -> float:
+        final_cc = base_crit_chance * (1 + stats.crit_chance_bonuses) + stats.flat_crit_chance
         if stats.enervate_active:
-            cc_before_enervate = (weapon["crit_chance"] * (1 + stats.cc_mod)
-                                  + stats.flat_cc)
-            enervate_extra = compute_enervate_cc(cc_before_enervate)
-        else:
-            enervate_extra = 0.0
+            final_cc += compute_enervate_cc(final_cc)
+        return final_cc
 
-        final_cc = (weapon["crit_chance"] * (1 + stats.cc_mod)
-                    + stats.flat_cc + enervate_extra)
+    @staticmethod
+    def calculate_modded_crit_multiplier(base_crit_multiplier: float, stats: BuildStats) -> float:
+        return (
+            base_crit_multiplier
+            * (1 + stats.crit_damage_bonuses)
+            + stats.final_crit_multiplier_add
+        )
 
-        final_cd  = weapon["crit_multiplier"] * (1 + stats.cd_mod) + stats.final_cd_add
-        avg_crit  = 1 + final_cc * (final_cd - 1)
+    @staticmethod
+    def calculate_average_crit_multiplier(
+            base_crit_chance: float, base_crit_multiplier: float, stats: BuildStats
+    ) -> float:
+        modded_crit_chance = DPSCalculator.calculate_modded_crit_chance(
+            base_crit_chance, stats
+        )
+        modded_crit_multiplier = DPSCalculator.calculate_modded_crit_multiplier(
+            base_crit_multiplier, stats
+        )
+        return 1 + modded_crit_chance * (modded_crit_multiplier - 1)
 
-        modified_base = (base_damage
-                         * (1 + stats.base_dmg + stats.ext_base_dmg)
-                         * strength_mult)
+    @staticmethod
+    def calculate_modded_multishot(comp: dict, stats: BuildStats) -> float:
+        return comp["multishot"] * (1 + stats.multishot_bonuses)
 
-        fire_rate = (weapon["fire_rate"]
-                     * (1 + stats.fire_rate + stats.ext_fire_rate))
+    @staticmethod
+    def calculate_modded_fire_rate(comp: dict, stats: BuildStats) -> float:
+        return comp["fire_rate"] * (
+            1 + stats.fire_rate_bonuses + stats.external_fire_rate_bonuses
+        )
 
-        dps = (modified_base
-               * (1 + stats.elemental)
-               * avg_crit
-               * (1 + stats.multishot)
-               * fire_rate
-               * (1 + stats.ext_faction)
-               * (1 + stats.final_dmg))
+    @staticmethod
+    def calculate_effective_fire_rate(comp: dict, stats: BuildStats) -> float:
+        modded_fire_rate = DPSCalculator.calculate_modded_fire_rate(comp, stats)
+        trigger_type = comp.get("trigger_type", "auto").lower()
+        if trigger_type == "charge":
+            charge_time = comp.get("charge_time", 0.0)
+            if charge_time <= 0:
+                return modded_fire_rate
+            return 1 / (charge_time + 1 / modded_fire_rate)
+        if trigger_type == "burst":
+            burst_count = comp.get("burst_count", 1)
+            burst_delay = comp.get("burst_delay", 0.0)
+            return burst_count / (1 / modded_fire_rate + (burst_count - 1) * burst_delay)
+        return modded_fire_rate
 
-        return dps
+    @staticmethod
+    def calculate_ability_strength_multiplier(
+            strength_mult: float, stats: BuildStats, apply_ability_strength: bool
+    ) -> float:
+        if not apply_ability_strength:
+            return strength_mult
+        return strength_mult + stats.ability_strength_bonuses
+
+    @staticmethod
+    def calculate_arsenal_total_damage(
+            comp: dict, strength_mult: float, stats: BuildStats,
+            apply_ability_strength: bool
+    ) -> float:
+        damage = comp["damage"]
+        base_damage = sum(damage.values())
+        if base_damage == 0:
+            return 0.0
+
+        unmodded_impact_distribution = damage.get("impact", 0) / base_damage
+        unmodded_puncture_distribution = damage.get("puncture", 0) / base_damage
+        unmodded_slash_distribution = damage.get("slash", 0) / base_damage
+        impact_bonus_term = unmodded_impact_distribution * stats.impact_bonuses
+        puncture_bonus_term = unmodded_puncture_distribution * stats.puncture_bonuses
+        slash_bonus_term = unmodded_slash_distribution * stats.slash_bonuses
+
+        elemental_and_physical_bonuses = (
+            1
+            + stats.elemental_bonuses
+            + impact_bonus_term
+            + puncture_bonus_term
+            + slash_bonus_term
+        )
+
+        return (
+            base_damage
+            * elemental_and_physical_bonuses
+            * DPSCalculator.calculate_damage_bonuses_multiplier(stats)
+            * DPSCalculator.calculate_ability_strength_multiplier(
+                strength_mult, stats, apply_ability_strength
+            )
+            * DPSCalculator.calculate_modded_multishot(comp, stats)
+        )
+
+    @staticmethod
+    def calculate_average_shot(
+            comp: dict, strength_mult: float, stats: BuildStats,
+            apply_ability_strength: bool
+    ) -> float:
+        arsenal_total_damage = DPSCalculator.calculate_arsenal_total_damage(
+            comp, strength_mult, stats, apply_ability_strength
+        )
+        average_crit_multiplier = DPSCalculator.calculate_average_crit_multiplier(
+            comp["crit_chance"], comp["crit_multiplier"], stats
+        )
+        return arsenal_total_damage * average_crit_multiplier
+
+    @staticmethod
+    def calculate_average_burst_dps(
+            average_shot: float, effective_fire_rate: float, stats: BuildStats
+    ) -> float:
+        return (
+            average_shot
+            * effective_fire_rate
+            * DPSCalculator.calculate_external_damage_bonuses_multiplier(stats)
+            * DPSCalculator.calculate_faction_damage_bonus_multiplier(stats)
+            * (1 + stats.final_damage_bonuses)
+        )
+
+    @staticmethod
+    def calculate(weapon: dict, direct_comp: dict, radial_comp: dict | None,
+                  strength_mult: float, stats: BuildStats,
+                  sustained: bool = True, include_dot: bool = False,
+                  dot_duration: float = 6.0) -> float:
+        total_burst = 0.0
+        total_dot_burst = 0.0
+        mag = None
+        rel = None
+        eff_fr = 0.0
+        ammo_cost_per_shot = 1.0
+
+        for comp in (direct_comp, radial_comp):
+            if comp is None:
+                continue
+            average_shot = DPSCalculator.calculate_average_shot(
+                comp, strength_mult, stats, weapon.get("exalted", False)
+            )
+            if average_shot == 0:
+                continue
+            effective_fire_rate = DPSCalculator.calculate_effective_fire_rate(comp, stats)
+            average_burst_dps = DPSCalculator.calculate_average_burst_dps(
+                average_shot, effective_fire_rate, stats
+            )
+            total_burst += average_burst_dps
+
+            if include_dot:
+                avg_total_avg_dot = DPSCalculator.calculate_dot(
+                    comp, strength_mult, stats, dot_duration,
+                    weapon.get("exalted", False)
+                )
+                total_dot_burst += avg_total_avg_dot * effective_fire_rate
+
+            if mag is None and comp.get("magazine") and comp["magazine"] > 0:
+                mag = comp["magazine"]
+                rel = comp.get("reload", 0.0)
+                eff_fr = effective_fire_rate
+                ammo_cost_per_shot = comp.get("ammo_cost_per_shot", 1.0)
+
+        sustained_factor = 1.0
+        if sustained and mag and mag > 0 and eff_fr > 0:
+            shots_per_mag = mag / ammo_cost_per_shot
+            sustained_factor = (shots_per_mag / eff_fr) / (rel + shots_per_mag / eff_fr)
+
+        return (total_burst + total_dot_burst) * sustained_factor
 
     # ── Stats factories ───────────────────────────────────────────────────
 
     @staticmethod
     def stats_from_mods(mods: tuple) -> BuildStats:
+        elemental_bonuses = 0.0
+        heat_bonuses = cold_bonuses = electricity_bonuses = toxin_bonuses = gas_bonuses = 0.0
+
+        for m in mods:
+            val = m.get("elemental", 0)
+            elemental_bonuses += val
+            etype = m.get("elemental_type", "")
+            if etype == "heat":
+                heat_bonuses += val
+            elif etype == "cold":
+                cold_bonuses += val
+            elif etype == "electricity":
+                electricity_bonuses += val
+            elif etype == "toxin":
+                toxin_bonuses += val
+            elif etype == "gas":
+                gas_bonuses += val
+
         return BuildStats(
-            base_dmg  = sum(m.get("base_dmg",  0) for m in mods),
-            multishot = sum(m.get("multishot",  0) for m in mods),
-            fire_rate = sum(m.get("fire_rate",  0) for m in mods),
-            elemental = sum(m.get("elemental",  0) for m in mods),
-            cc_mod    = sum(m.get("cc",         0) for m in mods),
-            cd_mod    = sum(m.get("cd",         0) for m in mods),
+            damage_bonuses=sum(m.get("base_dmg", 0) for m in mods),
+            multishot_bonuses=sum(m.get("multishot", 0) for m in mods),
+            fire_rate_bonuses=sum(m.get("fire_rate", 0) for m in mods),
+            elemental_bonuses=elemental_bonuses,
+            crit_chance_bonuses=sum(m.get("cc", 0) for m in mods),
+            crit_damage_bonuses=sum(m.get("cd", 0) for m in mods),
+            impact_bonuses=sum(m.get("impact_bonus", 0) for m in mods),
+            puncture_bonuses=sum(m.get("puncture_bonus", 0) for m in mods),
+            slash_bonuses=sum(m.get("slash_bonus", 0) for m in mods),
+            heat_bonuses=heat_bonuses,
+            cold_bonuses=cold_bonuses,
+            electricity_bonuses=electricity_bonuses,
+            toxin_bonuses=toxin_bonuses,
+            gas_bonuses=gas_bonuses,
+            faction_damage_bonuses=sum(m.get("faction", 0) for m in mods),
+            status_chance_bonuses=sum(
+                m.get("status_chance", m.get("sc", 0)) for m in mods
+            ),
         )
 
     @staticmethod
     def stats_from_wf_arcane(arc: dict) -> BuildStats:
         return BuildStats(
-            base_dmg     = arc.get("base_dmg",        0),
-            flat_cc      = arc.get("flat_crit_chance", 0),
-            fire_rate    = arc.get("fire_rate",        0),
-            final_dmg    = arc.get("final_dmg_bonus",  0),
-            final_cd_add = arc.get("final_cd_add",     0),
+            damage_bonuses=arc.get("base_dmg", 0),
+            flat_crit_chance=arc.get("flat_crit_chance", 0),
+            fire_rate_bonuses=arc.get("fire_rate", 0),
+            final_damage_bonuses=arc.get("final_dmg_bonus", 0),
+            final_crit_multiplier_add=arc.get("final_cd_add", 0),
+            ability_strength_bonuses=arc.get("strength", 0),
         )
 
     @staticmethod
     def stats_from_weapon_arcane(arc: dict) -> BuildStats:
         return BuildStats(
-            base_dmg        = arc.get("base_dmg",         0),
-            cc_mod          = arc.get("cc",                0),
-            flat_cc         = arc.get("flat_crit_chance",  0),
-            fire_rate       = arc.get("fire_rate",         0),
-            final_dmg       = arc.get("final_dmg_bonus",   0),
-            final_cd_add    = arc.get("final_cd_add",      0),
-            enervate_active = arc.get("dynamic_flat_cc",   False),
+            damage_bonuses=arc.get("base_dmg", 0),
+            crit_chance_bonuses=arc.get("cc", 0),
+            flat_crit_chance=arc.get("flat_crit_chance", 0),
+            fire_rate_bonuses=arc.get("fire_rate", 0),
+            final_damage_bonuses=arc.get("final_dmg_bonus", 0),
+            final_crit_multiplier_add=arc.get("final_cd_add", 0),
+            enervate_active=arc.get("dynamic_flat_cc", False),
         )
 
     @staticmethod
     def stats_from_buffs(buff_list: list) -> BuildStats:
         return BuildStats(
-            ext_faction   = sum(b.get("faction_mult",  0) for b in buff_list),
-            ext_fire_rate = sum(b.get("fire_rate_mult", 0) for b in buff_list),
-            ext_base_dmg  = sum(b.get("base_dmg",      0) for b in buff_list),
+            faction_damage_bonuses=sum(b.get("faction_mult", 0) for b in buff_list),
+            external_fire_rate_bonuses=sum(b.get("fire_rate_mult", 0) for b in buff_list),
+            external_damage_bonuses=sum(b.get("base_dmg", 0) for b in buff_list),
         )
 
     @staticmethod
     def merge_stats(*parts: BuildStats) -> BuildStats:
-        """Add together an arbitrary number of BuildStats objects."""
         merged = BuildStats()
         for p in parts:
-            merged.base_dmg        += p.base_dmg
-            merged.multishot       += p.multishot
-            merged.fire_rate       += p.fire_rate
-            merged.elemental       += p.elemental
-            merged.cc_mod          += p.cc_mod
-            merged.cd_mod          += p.cd_mod
-            merged.flat_cc         += p.flat_cc
-            merged.final_dmg       += p.final_dmg
-            merged.final_cd_add    += p.final_cd_add
-            merged.ext_faction     += p.ext_faction
-            merged.ext_fire_rate   += p.ext_fire_rate
-            merged.ext_base_dmg    += p.ext_base_dmg
-            merged.enervate_active  = merged.enervate_active or p.enervate_active
+            merged.damage_bonuses += p.damage_bonuses
+            merged.external_damage_bonuses += p.external_damage_bonuses
+            merged.impact_bonuses += p.impact_bonuses
+            merged.puncture_bonuses += p.puncture_bonuses
+            merged.slash_bonuses += p.slash_bonuses
+            merged.elemental_bonuses += p.elemental_bonuses
+            merged.heat_bonuses += p.heat_bonuses
+            merged.cold_bonuses += p.cold_bonuses
+            merged.electricity_bonuses += p.electricity_bonuses
+            merged.toxin_bonuses += p.toxin_bonuses
+            merged.gas_bonuses += p.gas_bonuses
+            merged.crit_chance_bonuses += p.crit_chance_bonuses
+            merged.crit_damage_bonuses += p.crit_damage_bonuses
+            merged.flat_crit_chance += p.flat_crit_chance
+            merged.final_crit_multiplier_add += p.final_crit_multiplier_add
+            merged.fire_rate_bonuses += p.fire_rate_bonuses
+            merged.external_fire_rate_bonuses += p.external_fire_rate_bonuses
+            merged.multishot_bonuses += p.multishot_bonuses
+            merged.status_chance_bonuses += p.status_chance_bonuses
+            merged.faction_damage_bonuses += p.faction_damage_bonuses
+            merged.final_damage_bonuses += p.final_damage_bonuses
+            merged.ability_strength_bonuses += p.ability_strength_bonuses
+            merged.enervate_active = merged.enervate_active or p.enervate_active
         return merged
 
+    @staticmethod
+    def _ticks_for_type(dmg_type: str, dot_duration: float) -> int:
+        """Return number of ticks to count for a given DoT type within dot_duration seconds."""
+        # Electricity and Gas tick at t=0,1,2,... (instant first tick)
+        if dmg_type in ("electricity", "gas"):
+            return min(6, 1 + int(dot_duration))
+        # Slash, Heat, Toxin first tick at t=1
+        if dot_duration < 1.0:
+            return 0
+        return min(6, int(dot_duration))
+
+    @staticmethod
+    def calculate_dot(
+            comp: dict, strength_mult: float, stats: BuildStats,
+            dot_duration: float = 6.0, apply_ability_strength: bool = False
+    ) -> float:
+        damage = comp["damage"]
+        base_damage = sum(damage.values())
+        if base_damage == 0:
+            return 0.0
+
+        slash_distribution = damage.get("slash", 0) / base_damage
+        heat_distribution = damage.get("heat", 0) / base_damage
+        electricity_distribution = damage.get("electricity", 0) / base_damage
+        toxin_distribution = damage.get("toxin", 0) / base_damage
+        gas_distribution = damage.get("gas", 0) / base_damage
+
+        # Damage over Time applies Faction Damage twice.
+        modded_base_damage = (
+            base_damage
+            * DPSCalculator.calculate_damage_bonuses_multiplier(stats)
+            * DPSCalculator.calculate_ability_strength_multiplier(
+                strength_mult, stats, apply_ability_strength
+            )
+        )
+        modded_multishot = DPSCalculator.calculate_modded_multishot(comp, stats)
+        faction_damage_bonus_multiplier = (
+            DPSCalculator.calculate_faction_damage_bonus_multiplier(stats)
+        )
+        modded_damage = (
+            modded_base_damage
+            * modded_multishot
+            * faction_damage_bonus_multiplier
+        )
+
+        # ---- determine tick count based on tick_model ----
+        tick_model = comp.get("tick_model", "delayed")  # "instant" for Electricity/Gas
+        if tick_model == "instant":
+            total_ticks = min(6, 1 + int(dot_duration))   # tick at t=0,1,2,...
+        else:
+            # delayed: first tick at t=1
+            if dot_duration < 1.0:
+                total_ticks = 0
+            else:
+                total_ticks = min(6, int(dot_duration))
+
+        if total_ticks == 0:
+            return 0.0
+
+        base_avg_dot = (
+            modded_damage
+            * faction_damage_bonus_multiplier
+            * total_ticks
+        )
+
+        avg_slash_dot = 0.35 * base_avg_dot
+        avg_electricity_dot = 0.50 * (1 + stats.electricity_bonuses) * base_avg_dot
+        avg_heat_dot = 0.50 * (1 + stats.heat_bonuses) * base_avg_dot
+        avg_toxin_dot = 0.50 * (1 + stats.toxin_bonuses) * base_avg_dot
+        avg_gas_dot = 0.50 * (1 + stats.gas_bonuses) * base_avg_dot
+
+        total_avg_dot = (
+            avg_slash_dot * slash_distribution
+            + avg_electricity_dot * electricity_distribution
+            + avg_heat_dot * heat_distribution
+            + avg_toxin_dot * toxin_distribution
+            + avg_gas_dot * gas_distribution
+        )
+
+        average_crit_multiplier = DPSCalculator.calculate_average_crit_multiplier(
+            comp["crit_chance"], comp["crit_multiplier"], stats
+        )
+
+        modded_status_chance = comp["status_chance"] * (1 + stats.status_chance_bonuses)
+        avg_total_avg_dot = (
+            modded_status_chance
+            * total_avg_dot
+            * average_crit_multiplier
+        )
+        return avg_total_avg_dot
 
 # ===========================================================================
 # Multiprocessing worker  (module-level so it can be pickled)
 # ===========================================================================
 
 def _eval_chunk(args):
-    chunk, weapon, base_damage, strength_mult, fixed_stats = args
+    chunk, weapon, direct_comp, radial_comp, strength_mult, fixed_stats, sustained, include_dot, dot_duration = args
     best_dps   = -1.0
     best_combo = None
     for mod_combo in chunk:
         mod_stats    = DPSCalculator.stats_from_mods(mod_combo)
         merged_stats = DPSCalculator.merge_stats(mod_stats, fixed_stats)
-        dps = DPSCalculator.calculate(weapon, base_damage, strength_mult, merged_stats)
+        dps = DPSCalculator.calculate(
+            weapon, direct_comp, radial_comp, strength_mult, merged_stats,
+            sustained=sustained, include_dot=include_dot, dot_duration=dot_duration
+        )
         if dps > best_dps:
             best_dps   = dps
             best_combo = mod_combo
@@ -232,24 +523,56 @@ class BuildOptimizer:
     def __init__(self, cfg: OptimizeConfig) -> None:
         self.cfg        = cfg
         self.weapon     = weapons[cfg.weapon_name]
-        self.base_dmg   = self._resolve_base_damage()
+        self.direct_comp, self.radial_comp = self._resolve_components()
+        def _total(comp):
+            return sum(comp["damage"].values()) if comp else 0.0
+        self.direct_base = _total(self.direct_comp)
+        self.radial_base = _total(self.radial_comp)
         self.strength   = self._resolve_strength()
         self.buff_stats = self._resolve_buff_stats()
         self.mod_combos         = self._build_mod_combos()
         self.wf_arcane_combos   = self._build_wf_arcane_combos()
         self.weapon_arcane_pool = self._build_weapon_arcane_pool()
 
-    # ── Setup helpers ─────────────────────────────────────────────────────
+   
 
-    def _resolve_base_damage(self) -> float:
-        w      = self.weapon
-        direct = w.get("direct_damage", 0)
-        radial = w.get("radial_damage",  0)
-        m      = self.cfg.damage_mode
-        if m == "all":    return direct + radial
-        if m == "direct": return direct
-        if m == "radial": return radial
-        raise ValueError(f"damage_mode must be 'all', 'direct', or 'radial' – got {m!r}")
+    # ── Setup helpers ─────────────────────────────────────────────────────
+    def _resolve_base_damage(self):
+        """Return (direct_base, radial_base) as total damage numbers."""
+        w = self.weapon
+
+        def total(comp):
+            if comp is None:
+                return 0.0
+            return sum(comp["damage"].values())
+
+        direct = total(w.get("direct"))
+        radial = total(w.get("radial"))
+
+        mode = self.cfg.damage_mode
+        if mode == "all":
+            return direct, radial
+        if mode == "direct":
+            return direct, 0.0
+        if mode == "radial":
+            return 0.0, radial
+        raise ValueError(f"Unknown damage_mode: {mode!r}")
+
+
+    def _resolve_components(self):
+        """Return (direct_comp, radial_comp)."""
+        w = self.weapon
+        mode = self.cfg.damage_mode
+        direct = w.get("direct")
+        radial = w.get("radial")   # None if absent
+
+        if mode == "all":
+            return direct, radial
+        elif mode == "direct":
+            return direct, None
+        elif mode == "radial":
+            return None, radial
+        raise ValueError(...)
 
     def _resolve_strength(self) -> float:
         if not self.weapon.get("exalted", False):
@@ -361,8 +684,9 @@ class BuildOptimizer:
                 chunk_size = max(1, len(self.mod_combos) // num_workers)
                 chunks     = [self.mod_combos[i:i + chunk_size]
                               for i in range(0, len(self.mod_combos), chunk_size)]
-                args       = [
-                    (c, self.weapon, self.base_dmg, self.strength, fixed_stats)
+                args = [
+                    (c, self.weapon, self.direct_comp, self.radial_comp, self.strength, fixed_stats,
+                     self.cfg.sustained, self.cfg.include_dot, self.cfg.dot_duration)
                     for c in chunks
                 ]
 
@@ -423,7 +747,12 @@ class BuildOptimizer:
         merged      = DPSCalculator.merge_stats(
             mod_stats, wf_stats, w_arc_stats, self.buff_stats
         )
-        return DPSCalculator.calculate(self.weapon, self.base_dmg, self.strength, merged)
+        return DPSCalculator.calculate(
+            self.weapon, self.direct_comp, self.radial_comp, self.strength, merged,
+            sustained=self.cfg.sustained,
+            include_dot=self.cfg.include_dot,
+            dot_duration=self.cfg.dot_duration
+        )
 
 
 # ===========================================================================
@@ -473,6 +802,9 @@ def run_calculation(
         use_arcanes:            bool = True,
         use_weapon_arcanes:     bool = True,
         damage_mode:            str  = "all",
+        sustained:              bool = True,
+        include_dot:            bool = True,
+        dot_duration:           float = 1.0,
         use_conditional_stacks: bool = True,
         faction:                str | None = None,
         allow_headshot:         bool = True,
@@ -487,10 +819,13 @@ def run_calculation(
         weapon_type            = weapon_type,
         damage_mode            = damage_mode,
         faction                = faction,
+        sustained              = sustained,
         allow_headshot         = allow_headshot,
         use_arcanes            = use_arcanes,
         use_weapon_arcanes     = use_weapon_arcanes,
         use_conditional_stacks = use_conditional_stacks,
+        include_dot            = include_dot,
+        dot_duration           = dot_duration,
         strength_mods          = strength_mods          or [],
         include_buffs          = include_buffs          or [],
         exclude_mods           = exclude_mods           or [],

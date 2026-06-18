@@ -23,16 +23,16 @@ pistol_mods_base = [
     {"name": "Primed Target Cracker",   "cd": 1.10},
     {"name": "Hollow Point",            "cd": 0.60, "base_dmg": -0.15},
     {"name": "Merciless Gunfight",      "cd": 0.60},
-    {"name": "Magnetic Might",          "elemental": 0.60, "cd": 0.40},
+    {"name": "Magnetic Might",          "elemental": 0.60, "elemental_type": "magnetic", "cd": 0.40},
 
     # Elemental – all 90% and Primed (165%) mods, plus special hybrids
-    {"name": "Pathogen Rounds",         "elemental": 0.90},
-    {"name": "Convulsion",              "elemental": 0.90},
-    {"name": "Heated Charge",           "elemental": 0.90},
-    {"name": "Deep Freeze",             "elemental": 0.90},
-    {"name": "Primed Heated Charge",    "elemental": 1.65},
-    {"name": "Primed Convulsion",       "elemental": 1.65},
-    {"name": "Accelerated Isotope",     "elemental": 0.60, "fire_rate": 0.60},  # radiation + fire rate
+    {"name": "Pathogen Rounds",         "elemental": 0.90, "elemental_type": "toxin"},
+    {"name": "Convulsion",              "elemental": 0.90, "elemental_type": "electricity"},
+    {"name": "Heated Charge",           "elemental": 0.90, "elemental_type": "heat"},
+    {"name": "Deep Freeze",             "elemental": 0.90, "elemental_type": "cold"},
+    {"name": "Primed Heated Charge",    "elemental": 1.65, "elemental_type": "heat"},
+    {"name": "Primed Convulsion",       "elemental": 1.65, "elemental_type": "electricity"},
+    {"name": "Accelerated Isotope",     "elemental": 0.60, "elemental_type": "radiation", "fire_rate": 0.60},  # radiation + fire rate
 
     # Fire rate (keep Gunslinger and Anemic Agility)
     {"name": "Gunslinger",              "fire_rate": 0.72},
@@ -66,16 +66,16 @@ pistol_mods_stacked = [
     {"name": "Primed Target Cracker",   "cd": 1.10},
     {"name": "Hollow Point",            "cd": 0.60, "base_dmg": -0.15},
     {"name": "Merciless Gunfight",      "cd": 0.60},
-    {"name": "Magnetic Might",          "elemental": 0.60, "cd": 0.40},
+    {"name": "Magnetic Might",          "elemental": 0.60, "elemental_type": "magnetic", "cd": 0.40},
 
     # Elemental (same high-damage mods)
-    {"name": "Pathogen Rounds",         "elemental": 0.90},
-    {"name": "Convulsion",              "elemental": 0.90},
-    {"name": "Heated Charge",           "elemental": 0.90},
-    {"name": "Deep Freeze",             "elemental": 0.90},
-    {"name": "Primed Heated Charge",    "elemental": 1.65},
-    {"name": "Primed Convulsion",       "elemental": 1.65},
-    {"name": "Accelerated Isotope",     "elemental": 0.60, "fire_rate": 0.60},
+    {"name": "Pathogen Rounds",         "elemental": 0.90, "elemental_type": "toxin"},
+    {"name": "Convulsion",              "elemental": 0.90, "elemental_type": "electricity"},
+    {"name": "Heated Charge",           "elemental": 0.90, "elemental_type": "heat"},
+    {"name": "Deep Freeze",             "elemental": 0.90, "elemental_type": "cold"},
+    {"name": "Primed Heated Charge",    "elemental": 1.65, "elemental_type": "heat"},
+    {"name": "Primed Convulsion",       "elemental": 1.65, "elemental_type": "electricity"},
+    {"name": "Accelerated Isotope",     "elemental": 0.60, "elemental_type": "radiation", "fire_rate": 0.60},
 
     # Fire rate
     {"name": "Gunslinger",              "fire_rate": 0.72},
